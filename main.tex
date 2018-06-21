@@ -131,15 +131,15 @@ To train a DL model in Nengo network nodes in the DL architecture are substitute
 
 During testing of the trained models, the SoftLIF units were exchanged for their spiking counterparts while maintaining the rest of the network architecture. In order to simulate dropout in classical networks, each test input was presented to the network for an extended period of time while propagating the activity through the network. The spiking behavior of the LIF neurons naturally simulates the random deactivation of neurons using dropout. Therefore, the network output varies over time. Collecting this output for a number of time steps $T$ allows to obtain a mean activation and its variance, representing the models epistemic uncertainty. If the model is trained extensively the network output should vary relatively little, corresponding to very confident predictions, while an untrained model will oscillate strongly. 
 
-In order to test the suitability of the described approach to obtain uncertainty estimates, both the classical MC dropout with rate based neurons as well as the spiking version were applied to the same test data. The results were analyzed both quantitatively as well as qualitatively. For qualitative analysis, the mean network outputs are visualized alongside the networks uncertainty estimate. Quantitatively, the uncertainty estimate obtained by MC dropout is taken as a reference standard and correlated with the uncertainty estimates from the trained spiking network and a non-trained baseline architecture. Mean and standard deviations of 10 simulations are reported in the results section.   
+In order to test the suitability of the described approach to obtain uncertainty estimates, both the classical MC dropout with rate based neurons as well as the spiking version were applied to the same test data. The results were analyzed both quantitatively as well as qualitatively. For qualitative analysis, the mean network outputs are visualized alongside the networks uncertainty estimate. Quantitatively, the uncertainty estimate obtained by MC dropout is taken as a reference standard and correlated with the uncertainty estimates from the trained spiking network and a non-trained baseline architecture. All models are evaluated on $1000$ test points and correlation and significance are computed using Pearson's correlation coefficient. Significance of the difference of the correlations was tested using Fisher's z-transform. 
 
 \section{Experiments}
 Two different experiments were performed to investigate the suitability of our proposed technique. Both experiments were taken from the original literature proposing the use of dropout to obtain Bayesian uncertainty estimates. The first experiment was introduced in a prominent Blogpost by Yarin Gal (cite) and constitutes a toy example that allowed for comparison on a simple task. The second experiment is taken from \cite{gal2016dropout} introduced to motivate the suitability of MC dropout for obtaining uncertainty estimates. Both experiments deal with regression tasks. 
 
-\paragraph{Experiment I} In the first experiment a neural network is trained to approximate a simple one-dimensional function:
+\subsection{Experiment I} In the first experiment a neural network was trained to approximate a simple one-dimensional function:
 
 \begin{align}
-f: \mathds{R} \to \matds{R}, x \mapsto x\sin{(x)}
+f: \mathds{R} \to \mathds{R}, x \mapsto x\sin{(x)}
 \end{align}
 
 visualized in Figure \ref{fig:exp1_func}.
@@ -149,7 +149,84 @@ visualized in Figure \ref{fig:exp1_func}.
 \includegraphics[width=\linewidth]{function.png}
 \caption{Visualization of the function $f$ learned in Experiment I}\label{fig:exp1_func}
 \end{figure}
+
+The network was trained on a limited set of $20$ datapoints with $x$-values randomly sampled from a  normal distribution with zero mean and unit variance. Hence, most of the training samples are centered around zero, while only a few data points at the margins of the function are presented to the network. The data is depicted in Figure \ref{fig:exp1_func}. A well calibrated uncertainty would thus be low around zero and increase towards more extreme values. The network was tested on the entire range $[-8,8]$.
+
+Since the task is relatively simple a shallow neural network of two hidden layers with 50 units each was trained. Dropout with a drop probability $p=0.05$ was employed after the first hidden layer. The network was trained for $1000$ epochs with a minibatch size of $5$ and Mean-Squared-Error criterion. As an optimizer RMSprop \cite{tieleman2012rmsprop} was used with a fixed learning rate of $1e-3$. No weight decay regularization was applied.
+
+For testing the classical MC dropout variation $T=20$ dropout samples were calculating by forwarding each test input $T$ times through the network. For the spiking network, all network nodes were replaced by spiking LIF neurons and each test input was presented for $100$ simulated time steps corresponding to a simulated time of $0.1$ seconds. The last $T$ time steps were then taken to estimate the mean and variance of the prediction. As a baseline the same network with randomly initialized weights was used to predict the test data. 
+
+\subsection{Experiment II}
+
+In the second experiment a more complex, real-world example was investigated. The Atmospheric $CO_2$ data set\footnote{http://scrippsco2.ucsd.edu/data/atmospheric\_co2/primary\_mlo\_co2\_record} provides monthly values of atmospheric $CO_2$ concentration measured at the Mauna Loa Observatory in Hawaii.
+Before training the data was demeaned, detrended, and normalized to the range $[-2,2]$. The data can be seen in blue in Figure \ref{fig:exp2}.
+
+The network was trained on the first $300$ data points and evaluated on the last $100$. Since the task is considerably more difficult due to the high frequency fluctuations in the data, a deeper neural network architecture was used. A network of five hidden layers with $1024$ neurons each was trained for $25000$ epochs. Since the dataset is small and of high frequencies, large minibatches of $100$ samples were used, resulting in a total of $75000$ gradient updates. Dropout with $p=0.1$ was used after each hidden layer. The network was trained with stochastic gradient descent and nesterov momentum. A momentum term of $0.9$ was used. An initial learning rate of $0.01$ was decreased exponentially with a decay factor of $0.96$ in a staircase procedure after every $1000$ parameter updates. Mean-squared-error loss was used with a weight-decay term of $1e-6$. For both non-spiking and spiking networks $T=50$ ``dropout'' samples were obtained during testing.
+
 \section{Results}
+
+
+\subsection{Experminent I}
+
+Despite a quite limited training dataset the continuous network learned to capture the function well around zero. Further away from zero no training data was seen anymore such that the network could not learn to approximate the function at these values. As to be expected, converting the network to its spiking versions causes some loss in accuracy, but the network still approximates the function well around zero. The mean output of both networks and the baseline network can be seen depicted in blue in Figure \ref{fig:exp1}. Epistemic uncertainty for all networks is shown in orange in terms of two standard deviations surrounding the mean. 
+
+In Figure \ref{subfig:exp1_mc} it is well visible that the MC dropout captures the epistemic uncertainty well, with very low values around zero, were the function is well approximated, and increasing towards the margins were the network has seen fewer training examples. These results confirm the results of Gal. 
+
+Figure \ref{subfig:exp1_spike} shows the results for the spiking uncertainty estimate. The network captures the function similarly well but the uncertainty is generally much higher, indicating a higher variation in the neural network output. Nevertheless, the network also captures the fact that the function is better approximated around zero and less well away from it. Generally the uncertainty appears like a scaled version of the MC dropout uncertainty. Since uncertainty is unit-less and for most applications only the relative uncertainty between different test datapoints is relevant, in practice this scaling should not pose a problem. 
+
+\begin{figure*}[t]
+\centering
+\begin{subfigure}[t]{0.3\textwidth}
+\centering
+\includegraphics[width=\linewidth]{gal_uncertainty4.png}
+\caption{Classical MC dropout}\label{subfig:exp1_mc}
+\end{subfigure}
+\begin{subfigure}[t]{0.3\textwidth}
+\centering
+\includegraphics[width=\linewidth]{spiking_uncertainty2.png}
+\caption{Spiking neural network}\label{subfig:exp1_spike}
+\end{subfigure}
+\begin{subfigure}[t]{0.3\textwidth}
+\centering
+\includegraphics[width=\linewidth]{random_uncertainty.png}
+\caption{Baseline network}\label{subfig:exp1_base}
+\end{subfigure}
+\caption{Neural network mean and uncertainty of prediction for Experiment I of classical, spiking, and baseline network.}\label{fig:exp1}
+\end{figure*}
+
+Figure \ref{subfig:exp1_base} shows the output of the non-trained baseline spiking network. As expected the network outputs zero for all test inputs, since no function has been learned. The uncertainty of the network still is low for a test input of 0 and increases slightly for values further away. This can be explained since the network always outputs 0 for zero input since the network is not active without external activation and higher input values generally drive the network more strongly such that the values further away from zero cause stronger fluctuations. 
+
+For a quantitative analysis, the variance values of all test inputs of the rate-based network were correlated with the variances of the spiking networks. The MC dropout estimate and the spiking variance correlated significantly with a Pearson's $r = 0.61, p < 0.001$. Also the baseline correlated significantly with $r = 0.39, p < 0.001$. This can be explained since the large amount of test samples increases the power and thus the chances to finding significant correlations and since the variance of the random network does follow a superficially similar pattern. 
+
+To test whether the trained spiking network still provides a better estimate of uncertainty than the random network, the correlation coefficients were compared using Fisher's z-transformation. The test indicated a significant difference in correlation coefficients with $z = -6.6, p < 0.001$.
+
+
+\subsection{Experiment II}
+
+The second experiment posed a considerably harder problem and we used larger models and more training to address this challenge. Nevertheless, the neural networks where only able to approximate the target function to a limited extent. The results can be seen in Figure \ref{fig:exp2}. Again the spiking network looses accuracy compared to the rate-based network but this time to a much larger extent, such that the function cannot be said to be well approximated by the network. Generally both networks do not learn the function successfully over the full input domain. In Figure \ref{subfig:exp2_mc} it can be seen that the network captures the functions in some parts around an $x$-value of 0. \citeA{gal2016dropout} trained their network for $1.000.000$ iterations while our network was only trained for $75.000$ iterations. Therefore it might be possible to achieve better results with more training time. 
+
+The MC dropout uncertainty captures the problem specification to some extent in that the uncertainty estimate is larger for values not seen during training (indicated by the vertical black like). Yet, the difference is to samples in the training set is relatively, putting the practical applicability for out-of-data sample detection into question. Nevertheless, the uncertainty estimate does resemble the uncertainty reported for tanh activation function in \cite{gal2016uncertainty}. It is not surprising that the uncertainty is more similar to that of tanh neurons that of rectified linear units, since the maximum firing rate of LIF neurons is bounded as is the tanh activation function. 
+
+
+\begin{figure*}[t]
+\centering
+\begin{subfigure}[t]{0.45\textwidth}
+\centering
+\includegraphics[width=\linewidth]{gal_co2_report.png}
+\caption{Classical MC dropout}\label{subfig:exp2_mc}
+\end{subfigure}
+\begin{subfigure}[t]{0.45\textwidth}
+\centering
+\includegraphics[width=\linewidth]{spike_co2_report.png}
+\caption{Spiking neural network}\label{subfig:exp2_spike}
+\end{subfigure}
+\caption{Neural network mean and uncertainty of prediction for Experiment II of classical, and spiking network.}\label{fig:exp2}
+\end{figure*}
+
+The spiking network output is depicted in Figure \ref{subfig:exp2_spike}. The network cannot be said to capture the target function well. The high frequency data is smoothed out by averaging over the spiking output. Again, more extensive training could partly resolve this issue, if also the rate-based version better captured the target. In this case, the uncertainty of the spiking network does not really reveal which part of the data is unknown to the network since even parts of the training data are not approximated well. Interestingly the uncertainty \emph{does} reveal those parts of the data that are captured well by the rate-based network but not well approximated by the spiking network. This indicates that the uncertainty estimate can still be an informative measure when the original continuous network is well calibrated. 
+
+Again, the uncertainties were compared quantitatively by calculating the Pearson correlation coefficients. The MC dropout uncertainty still correlated significantly with the spiking uncertainty with $r = 0.59, p < 0.001$. The random baseline network did not correlate significantly with the reference uncertainty with $r = -0.001, p > 0.9$. The difference between the correlation coefficients was significant with $z = 4.75, p < 0.001$.
+
 
 \section{Discussion}
 
