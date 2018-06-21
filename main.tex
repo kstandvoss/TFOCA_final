@@ -28,6 +28,7 @@
 
 \graphicspath{ {imgs/} }
 
+
 \makeatletter
 \newcommand{\ei@aux}[1]{\begin{easylist}[itemize] #1 \end{easylist}\endgroup}
 \newcommand{\ei}{\begingroup\Activate\ei@aux}
@@ -54,8 +55,8 @@ A traditionally rather orthogonal approach in Machine Learning is given by Bayes
 
 Given that both approaches address different theoretical and practical problems in artificial intelligence and machine learning and might serve as useful characterizations of human cognition on different levels of description, naturally, early research has sought to conjoin both paradigms. Research in Bayesian Deep Learning (BDL) rose during earlier episodes of popularity of artificial neural networks but fell out of fashion together with the core field of Deep Learning during the second? ``AI Winter'' (cite). Now that Deep Learning systems have made their way into main stream applications the focus again has shifted towards marrying the well understood Bayesian techniques with these successful models. Bayesian Deep Learning promises several advantages over classical approaches. The use of adequate priors could allow for training large architectures even with relatively little available data, e.g. in the medical domain (cite). At the same time priors could be used to address the challenging problem of transfer learning between similar tasks (cite). Additionally, Bayesian techniques enable a principled way for model comparison --- a problem that currently is often addressed rather empirically. More generally, Bayesian models can make use of a long history of mathematically rigorous investigation. This could help overcome a frequent criticism of Deep Learning systems, that they act as mere \emph{black box} models that are not sufficiently understood to be of real scientific value (cite).
 %%MAYBE also mention integration over unknown parameters!
-Finally, Bayesian methods seek to compute posterior distributions over the quantities of interest such that more than single point estimates can be given as answers to a problem. While it is clear that giving an exact probability distribution over the posterior is intractable in general (cite). 
-Confidences or uncertainties in the estimated expected values can be provided.
+Finally, Bayesian methods seek to compute posterior distributions over the quantities of interest such that more than single point estimates can be given as answers to a problem. While it is clear that giving an exact probability distribution over the posterior is intractable in general (cite), 
+confidences or uncertainties in the estimated expected values can be provided.
 BDL in this sense is a more rigorous approach to sampling from the posterior distribution as compared to classical DL. Whereas DL approaches get a single sample from the posterior distribution --- because they only sample from the prior distribution once, deterministically ---, BDL allows for getting a much clearer picture of the posterior, giving an approximate posterior distribution.
 This feature offers a variety of advantages and is especially relevant in critical domains were model failure is costly and Machine Learning systems are meant to replace human oversight (cite). Moreover, a system's ability to critically reflect upon its own computations is highly relevant for research in artificial intelligence and cognitive science. 
 
@@ -82,7 +83,7 @@ alleatoric vs. epistemic uncertainty
 
 \subsubsection{Monte Carlo Dropout}
 %copied from proposal
-Because of the large amounts of variables, deep neural networks are prone to overfitting. Meaning they tend to learn a mapping of the specific input-output pairs in the dataset. This is detrimental as it generally means that the network gives very poor predictions for samples that the network was not trained on. So too in real-world cases, where non-experts may work with the system, expecting sensible outputs. Until 2012, to reduce overfitting behaviour in deep neural networks one had to train an ensemble of networks. This is slow because essentially one trains the same network multiple times, resulting in either long training or smaller networks. However \citeA{hinton2012improving} showed that stochastically dropping elements from the computation during training reduces overfitting. As the title of their paper says, it does so by ``preventing co-adaptation of feature detectors''. That is, feature detectors that only result in sensible activation patterns when certain others do (which depends on the specific sample), are selected against. This is because the feature detectors such a detector is dependent on might be randomly dropped out during training \cite{srivastava2014dropout}.
+Because of the large amounts of variables, deep neural networks are prone to overfitting (cite). Meaning they tend to learn a mapping of the specific input-output pairs in the dataset. This is detrimental as it generally means that the network gives very poor predictions for samples that the network was not trained on. So too in real-world cases, where non-experts may work with the system, expecting sensible outputs. Until 2012, to reduce overfitting behaviour in deep neural networks one had to train an ensemble of networks. This is slow because essentially one trains the same network multiple times, resulting in either long training or smaller networks. However \citeA{hinton2012improving} showed that stochastically dropping elements from the computation during training reduces overfitting. As the title of their paper says, it does so by ``preventing co-adaptation of feature detectors''. That is, feature detectors that only result in sensible activation patterns when certain others do (which depends on the specific sample), are selected against. This is because the feature detectors such a detector is dependent on might be randomly dropped out during training \cite{srivastava2014dropout}.
 
 Dropout has since been given a probabilistic interpretation, as placing a Bernoulli prior over the network weights by \citeA{gal2016dropout}. This lets us view it as a Bayesian neural network that approximates Bayesian inference in a deep Gaussian process \cite{gal2016dropout}. Taking dropout networks to a Bayesian paradigm, they also introduce a method of obtaining uncertainty estimates from the network. This method they coined Monte Carlo dropout. It involves, not only dropping elements from the computation during training, but also at test time. The prediction is then taken to be the average, while the uncertainty is calculated by taking the sample variance, over a number of forward passes through the network.
 % end copy
@@ -120,8 +121,34 @@ explain primarly gals paper and why we do the same
 
 \section{Methods}
 
-\section{Experiments}
+In this work, classical Deep Learning architectures were trained using Nengo and then converted into spiking neural networks in order to investigate the effect of stochastic firing behavior as a mean of obtaining uncertainty estimates. Unlike real neural networks or spiking models thereof, DL models classically operate in a mere feed-forward fashion. That is to say that the input to the network is presented solely to a dedicated input layer which maps it to the next layer of the network through multiplication with a weight matrix, abstracting synaptic weight transmission. The subsequent layer applies a non-linear transformation to its input and passes its activation --- viewed as the firing rate of a population of cortical neurons  --- to the next layer of the network. This is done for several layers until a final output layer is reached were the output is compared to a desired target output during training or taken as the networks prediction for testing. The network is trained through gradient descent (cite) by backpropagating the error signal computed between the network output and the target. No feedback through horizontal of top-down projections is provided.
 
+In Nengo, ensembles of artificial neurons constitute basic building blocks of computation. Nengo provides a variety of neuron models, whereof Leaky-Integrate-and-Fire (LIF) neurons (cite) were employed in this project. LIF neurons are very simplified models of neural computation, yet provide a sufficient level of complexity to our goals while being efficiently simulated. LIF neurons integrate their input until an individual firing threshold is reached and the neuron spikes, resetting its membrane potential back to a baseline value and not being able to spike again for a certain refractory period. Hence, LIF neurons are temporally dependent and spike stochastically in that their state does not merely depend on the input but also its past states and the background activity in the ensemble (injected by Nengo). This property is relevant to our research question, since it allows us to integrate the activity of the output layer of our network over several time steps and take the individual samples as samples of the posterior distribution learned by the network. 
+
+An ensemble of neurons in Nengo seeks to cover its input domain uniformly by sampling an individual tuning curve for each of its neurons. The joint activation to an input signal given these different tuning curves allows to uniquely encode the input to the population.  
+
+To train a DL model in Nengo network nodes in the DL architecture are substituted by Nengo's neuron ensembles of LIF units. Ensembles are connected by simulated synapses which can implement temporal delays and smoothing. Here, synapses are initialized to merely pass on the activation after multiplying it with its associated weight so to represent normal weights in a DL model. As mentioned, we exploited the efficiency of training through Backpropagation by substituting the LIF neurons by continuous versions thereof. These \emph{SoftLIF} units temporally smooth the neurons spikes, thereby encoding its instantaneous firing rate. Different network architectures were used for the experiments described in the following section. All models were trained with classical dropout, performing approximate variational inference according to \cite{gal2016dropout}.
+
+During testing of the trained models, the SoftLIF units were exchanged for their spiking counterparts while maintaining the rest of the network architecture. In order to simulate dropout in classical networks, each test input was presented to the network for an extended period of time while propagating the activity through the network. The spiking behavior of the LIF neurons naturally simulates the random deactivation of neurons using dropout. Therefore, the network output varies over time. Collecting this output for a number of time steps $T$ allows to obtain a mean activation and its variance, representing the models epistemic uncertainty. If the model is trained extensively the network output should vary relatively little, corresponding to very confident predictions, while an untrained model will oscillate strongly. 
+
+In order to test the suitability of the described approach to obtain uncertainty estimates, both the classical MC dropout with rate based neurons as well as the spiking version were applied to the same test data. The results were analyzed both quantitatively as well as qualitatively. For qualitative analysis, the mean network outputs are visualized alongside the networks uncertainty estimate. Quantitatively, the uncertainty estimate obtained by MC dropout is taken as a reference standard and correlated with the uncertainty estimates from the trained spiking network and a non-trained baseline architecture. Mean and standard deviations of 10 simulations are reported in the results section.   
+
+\section{Experiments}
+Two different experiments were performed to investigate the suitability of our proposed technique. Both experiments were taken from the original literature proposing the use of dropout to obtain Bayesian uncertainty estimates. The first experiment was introduced in a prominent Blogpost by Yarin Gal (cite) and constitutes a toy example that allowed for comparison on a simple task. The second experiment is taken from \cite{gal2016dropout} introduced to motivate the suitability of MC dropout for obtaining uncertainty estimates. Both experiments deal with regression tasks. 
+
+\paragraph{Experiment I} In the first experiment a neural network is trained to approximate a simple one-dimensional function:
+
+\begin{align}
+f: \mathds{R} \to \matds{R}, x \mapsto x\sin{(x)}
+\end{align}
+
+visualized in Figure \ref{fig:exp1_func}.
+
+\begin{figure}
+\centering
+\includegraphics[]{function.png}
+\caption{Visualization of the function f learned in Experiment I}\label{fig:exp1_func}
+\end{figure}
 \section{Results}
 
 \section{Discussion}
